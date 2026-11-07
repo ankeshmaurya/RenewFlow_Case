@@ -1,0 +1,7 @@
+invoice_id,decision,reason_codes,owner,hours_open,sla_state,recommended_action
+84906,FAST_TRACK_PENDING_PARENT,LINK_ORPHAN_INVOICE,PARENT,41.0,Breached,Send the parent the one-tap WhatsApp choice. Escalate to an Ops agent if there is no reply in 4 hours.
+84907,FLAGGED,DISCOUNT_UNAPPROVED,OPS_LEAD,38.24,Breached,Ops Lead to approve or reject the discount and record an approval reference.
+84909,FLAGGED,PAY_PARTIAL|PAY_AMOUNT_MISMATCH,FINANCE_OPS,23.0,Breached,Confirm the installment plan. Schedule only the paid share if policy allows; otherwise hold and remind the parent.
+84910,FAST_TRACK_PENDING_PARENT,LINK_ORPHAN_INVOICE,PARENT,21.65,Breached,Send the parent the one-tap WhatsApp choice. Escalate to an Ops agent if there is no reply in 4 hours.
+84911,BLOCKED,PAY_NOT_CONFIRMED,FINANCE_OPS,20.5,Breached,Re-check the payment with the gateway before anything else. Tell the parent not to pay again; UPI payments can settle late.
+84912,FLAGGED,BATCH_CHANGE_NO_MATCH,SCHEDULING_DESK,17.33,Breached,"Find or open a matching batch, or offer the parent the closest alternatives."

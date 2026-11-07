@@ -1,0 +1,121 @@
+{
+  "asOf": "2026-11-04T09:00:00+05:30",
+  "invoices": {
+    "84901": {
+      "decision": "ALREADY_COMPLETE",
+      "expectedReasonCodes": [
+        "SCHEDULE_COVERAGE_LOW"
+      ],
+      "owner": "NONE"
+    },
+    "84902": {
+      "decision": "AUTO_APPROVE",
+      "expectedReasonCodes": [
+        "BOOKING_STUCK_RESCUED"
+      ],
+      "owner": "NONE"
+    },
+    "84903": {
+      "decision": "AUTO_APPROVE",
+      "expectedReasonCodes": [],
+      "owner": "NONE"
+    },
+    "84904": {
+      "decision": "AUTO_APPROVE",
+      "expectedReasonCodes": [
+        "ID_PAYER_MISMATCH"
+      ],
+      "owner": "NONE"
+    },
+    "84905": {
+      "decision": "AUTO_APPROVE",
+      "expectedReasonCodes": [
+        "BATCH_FULL_FALSE_POSITIVE"
+      ],
+      "owner": "NONE"
+    },
+    "84906": {
+      "decision": "FAST_TRACK_PENDING_PARENT",
+      "expectedReasonCodes": [
+        "LINK_ORPHAN_INVOICE"
+      ],
+      "owner": "PARENT"
+    },
+    "84907": {
+      "decision": "FLAGGED",
+      "expectedReasonCodes": [
+        "DISCOUNT_UNAPPROVED"
+      ],
+      "owner": "OPS_LEAD"
+    },
+    "84908": {
+      "decision": "AUTO_APPROVE",
+      "expectedReasonCodes": [
+        "LINK_DUPLICATE_FORM"
+      ],
+      "owner": "NONE"
+    },
+    "84909": {
+      "decision": "FLAGGED",
+      "expectedReasonCodes": [
+        "PAY_PARTIAL",
+        "PAY_AMOUNT_MISMATCH"
+      ],
+      "owner": "FINANCE_OPS"
+    },
+    "84910": {
+      "decision": "FAST_TRACK_PENDING_PARENT",
+      "expectedReasonCodes": [
+        "LINK_ORPHAN_INVOICE"
+      ],
+      "owner": "PARENT"
+    },
+    "84911": {
+      "decision": "BLOCKED",
+      "expectedReasonCodes": [
+        "PAY_NOT_CONFIRMED"
+      ],
+      "owner": "FINANCE_OPS"
+    },
+    "84912": {
+      "decision": "FLAGGED",
+      "expectedReasonCodes": [
+        "BATCH_CHANGE_NO_MATCH"
+      ],
+      "owner": "SCHEDULING_DESK"
+    },
+    "84913": {
+      "decision": "AUTO_APPROVE",
+      "expectedReasonCodes": [
+        "LINK_ID_TYPO_HEALED",
+        "DATA_TEXT_NORMALIZED"
+      ],
+      "owner": "NONE"
+    }
+  },
+  "forms": {
+    "3309": {
+      "suppressedAsDuplicateOf": 3308
+    },
+    "3313": {
+      "healedToInvoice": 84913,
+      "typedInvoiceId": 84931
+    }
+  },
+  "metrics": {
+    "decisionCounts": {
+      "AUTO_APPROVE": 6,
+      "FAST_TRACK_PENDING_PARENT": 2,
+      "FLAGGED": 3,
+      "BLOCKED": 1,
+      "ALREADY_COMPLETE": 1
+    },
+    "rawPaidInvoicesWithoutValidForm": 3,
+    "paidInvoicesWithoutFormAfterHealing": 2,
+    "formsPendingOver12h": 8,
+    "bookingsUnscheduledOver12h": 3,
+    "paidUnscheduledValueInr": 126850,
+    "fullyCompletedEndToEnd": 1,
+    "touchlessRatePercent": 46.2
+  }
+}

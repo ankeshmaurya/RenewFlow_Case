@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RenewFlow: Renewal Reconciliation Engine</title>
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="topbar">
+    <div class="brand">RenewFlow <span>Bambinos.live Operations</span></div>
+    <button id="navToggle" class="btn" aria-expanded="false" aria-controls="nav">Menu</button>
+  </header>
+  <div class="layout">
+    <nav id="nav" aria-label="Main navigation"></nav>
+    <main id="main" tabindex="-1">
+      <div id="banner" class="banner" role="alert" hidden></div>
+      <div id="app" aria-live="polite"></div>
+    </main>
+  </div>
+  <div id="drawerBackdrop" class="backdrop" hidden></div>
+  <aside id="drawer" class="drawer" role="dialog" aria-modal="true" aria-label="Case detail" hidden></aside>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <script src="/static/vendor/chart.umd.min.js"></script>
+  <script type="module" src="/static/js/app.js"></script>
+</body>
+</html>

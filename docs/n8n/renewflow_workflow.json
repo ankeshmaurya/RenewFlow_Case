@@ -1,0 +1,951 @@
+{
+  "name": "RenewFlow: Renewal to Schedule (shadow mode)",
+  "nodes": [
+    {
+      "id": "b4780019-9dca-41df-ac2e-0b79a90850b1",
+      "name": "Payment Captured Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "renewflow-payment-captured",
+        "options": {}
+      },
+      "webhookId": "1adfbc63-e431-4da4-9836-c9d287332ee6"
+    },
+    {
+      "id": "5ffadfe2-08a4-4c95-b670-8b72954ee888",
+      "name": "Upsert Invoice",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "options": {},
+        "query": "=INSERT INTO invoices (invoice_number, user_id, student_id, class_id, educator_id, amount, discount_amount, net_amount, payment_status, gateway_payment_id, gateway_order_id, paid_at, is_renewal) VALUES ('{{ $json.body.invoice_number }}', {{ $json.body.user_id }}, {{ $json.body.student_id }}, {{ $json.body.class_id }}, {{ $json.body.educator_id }}, {{ $json.body.amount }}, {{ $json.body.discount_amount || 0 }}, {{ $json.body.net_amount }}, 'Paid', '{{ $json.body.gateway_payment_id }}', '{{ $json.body.gateway_order_id }}', NOW(), 'Yes') ON DUPLICATE KEY UPDATE payment_status = 'Paid', paid_at = COALESCE(paid_at, NOW());"
+      },
+      "credentials": {
+        "mySql": {
+          "id": "REPLACE_ME",
+          "name": "Bambinos MySQL"
+        }
+      }
+    },
+    {
+      "id": "fa36ce79-1155-42a9-bbb0-b3f1c8c8ee56",
+      "name": "Every 15 Minutes Sweeper",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        240
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "a84a0bd6-6d08-4a68-998f-037dcb759dd9",
+      "name": "Reconcile Renewals",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        120
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RENEWFLOW_URL }}/api/reconcile",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"use_llm\": true}",
+        "options": {
+          "timeout": 60000
+        }
+      }
+    },
+    {
+      "id": "194e1c8c-115f-45f6-8b1b-614e8429550f",
+      "name": "Fetch Cases",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        780,
+        120
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.RENEWFLOW_URL }}/api/results",
+        "options": {
+          "timeout": 60000
+        }
+      }
+    },
+    {
+      "id": "f2aa57bd-a063-4e0c-9ff5-55020fffe98f",
+      "name": "Split Cases",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        120
+      ],
+      "parameters": {
+        "fieldToSplitOut": "cases",
+        "options": {}
+      }
+    },
+    {
+      "id": "581c3bc7-3bd5-4113-b7ab-4b2a781a4316",
+      "name": "Check Notification Log",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1300,
+        120
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "options": {},
+        "query": "=SELECT COUNT(*) AS n FROM renewal_notifications WHERE invoice_id = {{ $json.invoice.id }} AND decision = '{{ $json.decision }}' AND reason_codes = '{{ $json.reason_codes.join(\"|\") }}';"
+      },
+      "credentials": {
+        "mySql": {
+          "id": "REPLACE_ME",
+          "name": "Bambinos MySQL"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "f0a1abe3-6f36-4957-b7b7-11ae07c46e0f",
+      "name": "Not Yet Notified",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        120
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "37dc55d7-d1b3-4b2d-bfa3-fad7570512b3",
+              "leftValue": "={{ $json.n }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "6937263c-70db-4646-b61f-b08609fc7a2c",
+      "name": "Route By Decision",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1820,
+        120
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "36aba87d-28be-454b-ada8-7938da9deddf",
+                    "leftValue": "={{ $('Split Cases').item.json.decision }}",
+                    "rightValue": "AUTO_APPROVE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "AUTO_APPROVE"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "bc510a7b-6e02-490d-9f4a-2a35ecf42b59",
+                    "leftValue": "={{ $('Split Cases').item.json.decision }}",
+                    "rightValue": "FAST_TRACK_PENDING_PARENT",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "FAST_TRACK_PENDING_PARENT"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "23b88d19-a7ee-4ea3-85b8-963c5b465e79",
+                    "leftValue": "={{ $('Split Cases').item.json.decision }}",
+                    "rightValue": "FLAGGED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "FLAGGED"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "061bc55f-c77a-4ed4-a9f7-370b300610d2",
+                    "leftValue": "={{ $('Split Cases').item.json.decision }}",
+                    "rightValue": "BLOCKED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "BLOCKED"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "41c796ae-d40b-4ee7-8bdb-999d1f44b7bf",
+      "name": "Approve Case",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2100,
+        -200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RENEWFLOW_URL }}/api/cases/{{ $('Split Cases').item.json.invoice.id }}/approve",
+        "options": {}
+      }
+    },
+    {
+      "id": "6fe0b458-042a-47a0-a024-410085961f22",
+      "name": "Insert Schedule Rows",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        2360,
+        -200
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "options": {},
+        "query": "=INSERT INTO class_schedule_bookings (bookingrequest_id, invoice_id, classbatch_id, class_id, user_id, student_id, educator_id, class_date, start_time, end_time, booking_type, is_cancelled, attended_class) VALUES {{ $('Split Cases').item.json.proposed_rows.map(r => `(${r.bookingrequest_id ?? 'NULL'}, ${r.invoice_id}, ${r.classbatch_id}, ${r.class_id}, ${r.user_id}, ${r.student_id}, ${r.educator_id}, '${r.class_date}', '${r.start_time}', '${r.end_time}', 'Regular_Renewal', 'No', 'No')`).join(', ') }};"
+      },
+      "credentials": {
+        "mySql": {
+          "id": "REPLACE_ME",
+          "name": "Bambinos MySQL"
+        }
+      },
+      "disabled": true,
+      "notes": "DISABLED on purpose: shadow mode. Enable only after the Assist-to-Autopilot gate is met. classschedule_id is resolved by the scheduler from (classbatch_id, class_date, start_time)."
+    },
+    {
+      "id": "5092bb0f-62b0-4cdb-a00a-1ccc0998ef86",
+      "name": "Draft Messages Auto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2620,
+        -200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RENEWFLOW_URL }}/api/messages/generate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({invoice_id: $('Split Cases').item.json.invoice.id, language: 'English', use_llm: true}) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "83828980-377b-41dd-91c4-c945f482ec5f",
+      "name": "Only Parent Message Auto",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        2880,
+        -200
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c4376f57-63d2-4e49-80ee-dca4a4a3b01e",
+              "leftValue": "={{ $json.invoice_id }}",
+              "rightValue": "={{ $('Split Cases').item.json.invoice.id }}",
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "27401903-bdad-4faa-bce0-3b69ffa0796d",
+              "leftValue": "={{ $json.recipient_role }}",
+              "rightValue": "PARENT",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "54fe4b6c-cfae-4b95-b148-c063cdcf6fd0",
+      "name": "Lookup Parent Mobile Auto",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        3140,
+        -200
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "options": {},
+        "query": "=SELECT mobile AS parent_mobile FROM invoices WHERE id = {{ $('Split Cases').item.json.invoice.id }};"
+      },
+      "credentials": {
+        "mySql": {
+          "id": "REPLACE_ME",
+          "name": "Bambinos MySQL"
+        }
+      }
+    },
+    {
+      "id": "1cce5ca1-bcd4-449d-9ba0-cdc7a556672b",
+      "name": "Send Parent Confirmation",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        3400,
+        -200
+      ],
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "={{ $env.WHATSAPP_PHONE_NUMBER_ID }}",
+        "recipientPhoneNumber": "={{ $json.parent_mobile }}",
+        "textBody": "={{ $('Only Parent Message Auto').item.json.body }}",
+        "additionalFields": {}
+      },
+      "credentials": {
+        "whatsAppApi": {
+          "id": "REPLACE_ME",
+          "name": "WhatsApp Business"
+        }
+      }
+    },
+    {
+      "id": "506279ec-7d97-4196-a21a-7f897b12ac63",
+      "name": "Draft Messages Parent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2100,
+        60
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RENEWFLOW_URL }}/api/messages/generate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({invoice_id: $('Split Cases').item.json.invoice.id, language: 'English', use_llm: true}) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "f39964b1-94a4-4745-be5e-594da37a4ef7",
+      "name": "Only Parent Message Fast",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        2360,
+        60
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "7c24f3e6-8e92-4483-aeae-eb0e75b30e9f",
+              "leftValue": "={{ $json.invoice_id }}",
+              "rightValue": "={{ $('Split Cases').item.json.invoice.id }}",
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "26fd67cb-4696-4f21-bf22-cb62800bb10c",
+              "leftValue": "={{ $json.recipient_role }}",
+              "rightValue": "PARENT",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "2231b222-81be-49ef-bddd-2eaa58e03799",
+      "name": "Lookup Parent Mobile Fast",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        2620,
+        60
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "options": {},
+        "query": "=SELECT mobile AS parent_mobile FROM invoices WHERE id = {{ $('Split Cases').item.json.invoice.id }};"
+      },
+      "credentials": {
+        "mySql": {
+          "id": "REPLACE_ME",
+          "name": "Bambinos MySQL"
+        }
+      }
+    },
+    {
+      "id": "4b55894f-3cf7-4f85-8b39-a3a39cf2b8ba",
+      "name": "Send Parent Choice",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        2880,
+        60
+      ],
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "={{ $env.WHATSAPP_PHONE_NUMBER_ID }}",
+        "recipientPhoneNumber": "={{ $json.parent_mobile }}",
+        "textBody": "={{ $('Only Parent Message Fast').item.json.body }}",
+        "additionalFields": {}
+      },
+      "credentials": {
+        "whatsAppApi": {
+          "id": "REPLACE_ME",
+          "name": "WhatsApp Business"
+        }
+      }
+    },
+    {
+      "id": "32d6f39a-aa03-4f2c-a536-e337175684ff",
+      "name": "Draft Messages Exception",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2100,
+        320
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RENEWFLOW_URL }}/api/messages/generate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({invoice_id: $('Split Cases').item.json.invoice.id, language: 'English', use_llm: true}) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "73f9da67-cab3-46d0-b840-97a1a2b01141",
+      "name": "Only Ops Message",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        2360,
+        320
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "2da8ee68-ce55-47e9-b76c-c40b4124f05b",
+              "leftValue": "={{ $json.invoice_id }}",
+              "rightValue": "={{ $('Split Cases').item.json.invoice.id }}",
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "d973385a-5ebf-4594-9fc1-e9c9f778c474",
+              "leftValue": "={{ $json.channel }}",
+              "rightValue": "slack",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f75cd833-4bed-4fc4-9c99-1f6aff2351e7",
+      "name": "Post To Exception Channel",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        2620,
+        320
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "={{ $json.recipient_label.split(' ')[0].replace('#','') }}"
+        },
+        "text": "={{ $json.body }}",
+        "otherOptions": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_ME",
+          "name": "Slack"
+        }
+      }
+    },
+    {
+      "id": "0038803c-481a-4900-bf92-9eb057a38de9",
+      "name": "Log Notification",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        3660,
+        60
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "options": {},
+        "query": "=INSERT INTO renewal_notifications (invoice_id, decision, reason_codes, created_at) VALUES ({{ $('Split Cases').item.json.invoice.id }}, '{{ $('Split Cases').item.json.decision }}', '{{ $('Split Cases').item.json.reason_codes.join(\"|\") }}', NOW());"
+      },
+      "credentials": {
+        "mySql": {
+          "id": "REPLACE_ME",
+          "name": "Bambinos MySQL"
+        }
+      }
+    },
+    {
+      "id": "6d6bce08-132a-4a4a-a787-44b556fd5251",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        520
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "609db5bb-b6c6-4770-a2a4-fb2d589901e6",
+      "name": "Alert Slack On Error",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        260,
+        520
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "ops-renewals"
+        },
+        "text": "=RenewFlow workflow failed in node {{ $json.execution.lastNodeExecuted }}: {{ $json.execution.error.message }}",
+        "otherOptions": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_ME",
+          "name": "Slack"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Payment Captured Webhook": {
+      "main": [
+        [
+          {
+            "node": "Upsert Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Invoice": {
+      "main": [
+        [
+          {
+            "node": "Reconcile Renewals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every 15 Minutes Sweeper": {
+      "main": [
+        [
+          {
+            "node": "Reconcile Renewals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reconcile Renewals": {
+      "main": [
+        [
+          {
+            "node": "Fetch Cases",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Cases": {
+      "main": [
+        [
+          {
+            "node": "Split Cases",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Cases": {
+      "main": [
+        [
+          {
+            "node": "Check Notification Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Notification Log": {
+      "main": [
+        [
+          {
+            "node": "Not Yet Notified",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Not Yet Notified": {
+      "main": [
+        [
+          {
+            "node": "Route By Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route By Decision": {
+      "main": [
+        [
+          {
+            "node": "Approve Case",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Draft Messages Parent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Draft Messages Exception",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Draft Messages Exception",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approve Case": {
+      "main": [
+        [
+          {
+            "node": "Insert Schedule Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Schedule Rows": {
+      "main": [
+        [
+          {
+            "node": "Draft Messages Auto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft Messages Auto": {
+      "main": [
+        [
+          {
+            "node": "Only Parent Message Auto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only Parent Message Auto": {
+      "main": [
+        [
+          {
+            "node": "Lookup Parent Mobile Auto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Parent Mobile Auto": {
+      "main": [
+        [
+          {
+            "node": "Send Parent Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Parent Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Log Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft Messages Parent": {
+      "main": [
+        [
+          {
+            "node": "Only Parent Message Fast",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only Parent Message Fast": {
+      "main": [
+        [
+          {
+            "node": "Lookup Parent Mobile Fast",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Parent Mobile Fast": {
+      "main": [
+        [
+          {
+            "node": "Send Parent Choice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Parent Choice": {
+      "main": [
+        [
+          {
+            "node": "Log Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft Messages Exception": {
+      "main": [
+        [
+          {
+            "node": "Only Ops Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only Ops Message": {
+      "main": [
+        [
+          {
+            "node": "Post To Exception Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post To Exception Channel": {
+      "main": [
+        [
+          {
+            "node": "Log Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Alert Slack On Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [],
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
